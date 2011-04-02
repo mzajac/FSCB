@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-DEBUG = True
 import sys, os, shutil, string, codecs, re
 from xml.dom import minidom
 

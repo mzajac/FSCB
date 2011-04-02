@@ -1,6 +1,6 @@
 Intro:
 This program converts a hOCR file into a corpus that can be opened in poliqarp (http://poliqarp.sourceforge.net/).
-It treats information about fonts as grammatical categories, enabling a user to query the corpus by these information.
+It treats information about fonts as grammatical categories, enabling a user to query the corpus by this information.
 
 Usage:
 ./font_sensitive.py hOCR_filename [corpus_name]

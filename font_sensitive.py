@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+DEBUG = True
 import sys, os, shutil, string, codecs, re
 from xml.dom import minidom
 
@@ -23,6 +24,8 @@ def extract_font_info(string, font_sizes, font_families):
     font_style = match_attribute("font-style", "straight")
     font_weight = match_attribute("font-weight", "normal")
     font_family = match_attribute("font-family")
+    #poliqarp has a problem with attributes containing commas which are removed
+    font_family = "".join([c for c in font_family if c != ","])
     font_size = match_attribute("font-size")
     font_sizes.add(font_size)
     font_families.add(font_family)
@@ -51,11 +54,8 @@ locale = pl_PL
     print >> f, bp_cfg
 
 def write_config(font_families, font_sizes):
-    font_families_string, font_sizes_string = "font-family =", "font-size ="
-    for font_family in font_families:
-        font_families_string += " %s" % font_family
-    for font_size in font_sizes:
-        font_sizes_string += " %s" % font_size
+    font_families = "font-family = " + " ".join(font_families)
+    font_sizes = "font-size = " + " ".join(font_sizes)
     
     cfg = """[attr]
 font-style = italic straight
@@ -72,7 +72,7 @@ entity-orth = orth
 entity-base = base
 entity-tag = tag
 entity-pos = pos
-    """ % (font_families_string, font_sizes_string)
+    """ % (font_families, font_sizes)
     
     try:
         f = open("%s.cfg" % DIRECTORY, "w")
@@ -110,8 +110,9 @@ def write_morph(morph):
     print >> f, morph
     
 
-#returns morph.xml in XCES format and two sets: one containing all font-families used and second all font sizes used in the document (both are needed to create corpus.cfg file)
 def parse_hOCR_file(f):
+    """returns morph.xml in XCES format and two sets: one containing all font-families used and second all font sizes used in the document (both are needed to create corpus.cfg file)"""
+    
     font_sizes, font_families = set([]), set([])
     morph_header = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE cesAna SYSTEM "xcesAnaIPI.dtd">
@@ -128,14 +129,14 @@ def parse_hOCR_file(f):
 <lex disamb="1"><base></base><ctag>interp</ctag></lex>
 </tok>
 """
-    morph_content = ""
+    morph_content = []
     try:
         dom = minidom.parse(f)
     except:
         err("Error parsing XML")
     paragraphs = dom.getElementsByTagName("p")
     for paragraph in paragraphs:
-        morph_content += '<chunk type="p">\n'
+        morph_content.append('<chunk type="p">\n')
         spans = paragraph.getElementsByTagName("span")
         line_ended = True
         for span in spans:
@@ -146,32 +147,32 @@ def parse_hOCR_file(f):
                 font_info = extract_font_info(span.attributes["style"].value, font_sizes, font_families)
                
                 if line_ended:
-                    morph_content += '<chunk type="s">\n'
+                    morph_content.append('<chunk type="s">\n')
                
                 for word in words:
                     #word may contain punctuation at the beginning and end
                         while word and word[0] in string.punctuation:
-                            morph_content += morph_interp % word[0]
+                            morph_content.append(morph_interp % word[0])
                             word = word[1:]
-                        temporary_content = ""
-                        while word and word[-1] in string.punctuation:
-                            temporary_content += morph_interp % word[-1]
+                        temporary_content = []
+                        while word and word[-1] in string.punctuation:          
+                            temporary_content.append(morph_interp % word[-1])
                             word = word[:-1]
                         if word:
-                            morph_content += morph_word % (word, font_info)
+                            morph_content.append(morph_word % (word, font_info))
                         morph_content += temporary_content
                 
                 if line[-1] == '.':
                     #sentence ends
-                    morph_content += '</chunk>\n'
+                    morph_content.append('</chunk>\n')
                     line_ended = True
                 else:
                     line_ended = False
         if not line_ended:
-            morph_content += '</chunk>\n'
-        morph_content += '</chunk>\n'
+            morph_content.append('</chunk>\n')
+        morph_content.append('</chunk>\n')
     
-    return morph_header + morph_content + morph_footer, font_families, font_sizes
+    return morph_header + "".join(morph_content) + morph_footer, font_families, font_sizes
 
 def main():
     try:
@@ -196,9 +197,5 @@ def main():
     write_bp_config()
     os.system("bpng %s" % (DIRECTORY))
 
-def tests():
-    print extract_font_info("font-family: TimesNewRoman; font-size: 12pt; font-weight: bold; font-style: italic", set([]), set([]))
-    print extract_font_info("font-family: TimesNewRoman; font-size: 9.2pt;", set([]), set([]))
-
-main()
-#tests()
+if __name__ == '__main__':
+    main()

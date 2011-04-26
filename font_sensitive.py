@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#encoding: utf-8
 import sys, os, shutil, string, codecs, re
 from xml.dom import minidom
 
@@ -45,6 +46,57 @@ def create_directories():
 def write_bp_config():
     bp_cfg = """[locale]
 locale = pl_PL
+
+[meta]
+name = autor
+multiple = yes
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/analytic/h.author
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/h.author
+
+[meta]
+name = tytuł
+path = /cesHeader/fileDesc/sourceDesc/biblFull/titleStmt/h.title
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/analytic/h.title
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/h.title
+
+[meta]
+name = wydawca
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/imprint/publisher
+
+[meta]
+name = miejsce_wydania
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/imprint/pubPlace
+
+[meta]
+name = data_wydania
+type = date
+path = /cesHeader/fileDesc/sourceDesc//biblFull/publicationStmt/pubDate/@value
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/imprint/pubDate/@value
+
+[meta]
+name = data_pierwszego_wydania
+type = date
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/analytic/origDate/firstPubDate/@value
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/imprint/origDate/firstPubDate/@value
+
+[meta]
+name = data_powstania
+type = date
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/analytic/origDate/createDate/@value
+path = /cesHeader/fileDesc/sourceDesc//biblStruct/monogr/imprint/origDate/createDate/@value
+
+[meta]
+name = styl
+type = enum
+values = "artystyczny" "proza" "poezja" "dramat" "publicystyczny" "literatura faktu" "naukowo-dydaktyczny" "naukowy humanistyczny" "naukowy przyrodniczy" "naukowy techniczny" "popularno-naukowy" "podręcznik" "urzędowo-kancelaryjny" "protokół" "ustawa" "informacyjno-poradnikowy" "potoczny"
+multiple = yes
+path = /cesHeader/profileDesc/textClass/h.keywords/keyTerm
+
+[meta]
+name = medium
+type = enum
+values = "prasa" "książka" "internet" "rękopis"
+path = /cesHeader/profileDesc/textDesc/channel
     """
     try:
         f = open("%s.bp.conf" % DIRECTORY, "w")
@@ -89,6 +141,8 @@ def write_header():
     <sourceDesc>
       <biblStruct>
         <monogr></monogr>
+            <title>test</title>
+            <author>test</author>
       </biblStruct>
     </sourceDesc>
   </fileDesc>
@@ -103,7 +157,6 @@ def write_header():
 def write_morph(morph):
     try:
         f = codecs.getwriter("utf-8")(open("%s/morph.xml" % SUBDIRECTORY, "w"))
-        #f = open("%s/morph.xml" % SUBDIRECTORY, "w")
     except IOError:
         err("Error writing morph")
     print >> f, morph
@@ -132,7 +185,13 @@ def parse_hOCR_file(f):
     try:
         dom = minidom.parse(f)
     except:
-        err("Error parsing XML")
+        f.seek(0);
+        #reads first line which contains encoding "utf8" instead of "utf-8" and causes the parser to crash        
+        f.readline()
+        try: 
+            dom = minidom.parse(f)
+        except:
+            err("Error parsing XML")
     paragraphs = dom.getElementsByTagName("p")
     for paragraph in paragraphs:
         morph_content.append('<chunk type="p">\n')
@@ -184,9 +243,6 @@ def main():
         f = open(filename)
     except:
         err("specified file doesn't exist")
-
-    #reads first line which contains encoding "utf8" instead of "utf-8" and causes the parser to crash
-    f.readline()
 
     morph, font_families, font_sizes = parse_hOCR_file(f)
     create_directories()

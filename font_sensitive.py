@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #encoding: utf-8
 import sys, os, shutil, string, codecs, re
-from xml.dom import minidom
+from lxml import etree
+from lxml.cssselect import CSSSelector
 
 SUBDIRECTORY = "data"
 
@@ -25,7 +26,7 @@ def extract_font_info(string, font_sizes, font_families):
     font_weight = match_attribute("font-weight", "normal")
     font_family = match_attribute("font-family")
     #poliqarp has a problem with attributes containing commas which are removed
-    font_family = "".join([c for c in font_family if c != ","])
+    font_family = "".join([c for c in font_family if c not in [',', ' ']])
     font_size = match_attribute("font-size")
     font_sizes.add(font_size)
     font_families.add(font_family)
@@ -183,54 +184,28 @@ def parse_hOCR_file(f):
 """
     morph_content = []
     try:
-        dom = minidom.parse(f)
+        dom = etree.parse(f)
     except:
-        f.seek(0);
-        #reads first line which contains encoding "utf8" instead of "utf-8" and causes the parser to crash        
-        f.readline()
-        try: 
-            dom = minidom.parse(f)
-        except:
-            err("Error parsing XML")
-    paragraphs = dom.getElementsByTagName("p")
+        err("Error parsing XML")
+        
+    paragraphs = CSSSelector('p')(dom)
     for paragraph in paragraphs:
-        morph_content.append('<chunk type="p">\n')
-        spans = paragraph.getElementsByTagName("span")
-        line_ended = True
-        for span in spans:
-            if len(span.childNodes) == 1:
-                #contains text
-                line = span.childNodes[0].nodeValue
-                words = string.split(line)
-                font_info = extract_font_info(span.attributes["style"].value, font_sizes, font_families)
-               
-                if line_ended:
-                    morph_content.append('<chunk type="s">\n')
-               
-                for word in words:
-                    #word may contain punctuation at the beginning and end
-                        while word and word[0] in string.punctuation:
-                            morph_content.append(morph_interp % word[0])
-                            word = word[1:]
-                        temporary_content = []
-                        while word and word[-1] in string.punctuation:          
-                            temporary_content.append(morph_interp % word[-1])
-                            word = word[:-1]
-                        if word:
-                            morph_content.append(morph_word % (word, font_info))
-                        morph_content += temporary_content
-                
-                if line[-1] == '.':
-                    #sentence ends
-                    morph_content.append('</chunk>\n')
-                    line_ended = True
-                else:
-                    line_ended = False
-        if not line_ended:
-            morph_content.append('</chunk>\n')
-        morph_content.append('</chunk>\n')
+        morph_content.append('<chunk type="p">\n<chunk type="s">\n')
+        spans = CSSSelector('span')(paragraph.getchildren()[0]) 
+        #first span is empty, second contains font info
+        font_info = extract_font_info(spans[1].attrib["style"], font_sizes, font_families)    
+        #every span except the first two contains a word
+        for i in range(2, len(spans)):
+            if spans[i].text:
+                word = spans[i].text.strip().replace('&', '&amp;')
+                if word:
+                    if word[0] in string.punctuation:
+                        morph_content.append(morph_interp % word)
+                    else:
+                        morph_content.append(morph_word % (word, font_info))
+        morph_content.append('</chunk>\n</chunk>\n')
     
-    return morph_header + "".join(morph_content) + morph_footer, font_families, font_sizes
+    return morph_header + "".join(morph_content) + morph_footer, font_families, font_sizes    
 
 def main():
     try:

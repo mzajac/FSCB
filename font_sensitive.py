@@ -189,20 +189,31 @@ def parse_hOCR_file(f):
         err("Error parsing XML")
         
     paragraphs = CSSSelector('p')(dom)
+#    i = 0
     for paragraph in paragraphs:
+#        i += 1
+#        if (i > 2):
+#            sys.exit(1)
         morph_content.append('<chunk type="p">\n<chunk type="s">\n')
-        spans = CSSSelector('span')(paragraph.getchildren()[0]) 
-        #first span is empty, second contains font info
-        font_info = extract_font_info(spans[1].attrib["style"], font_sizes, font_families)    
-        #every span except the first two contains a word
-        for i in range(2, len(spans)):
-            if spans[i].text:
-                word = spans[i].text.strip().replace('&', '&amp;')
-                if word:
-                    if word[0] in string.punctuation:
-                        morph_content.append(morph_interp % word)
-                    else:
-                        morph_content.append(morph_word % (word, font_info))
+        #spans = CSSSelector('span')(paragraph.getchildren()[0])
+        style_spans = paragraph.getchildren()
+        for style_span in style_spans:
+            try:
+                font_info = extract_font_info(style_span.attrib["style"], font_sizes, font_families)    
+            except KeyError:
+                err("Can`t find style info in XML file.")
+            spans = style_span.getchildren()
+            for span in spans:
+                try:
+                    if span.attrib["class"] == "ocrx_word" and span.text:
+                        word = span.text.strip().replace('&', '&amp;')
+                        if word:
+                            if word[0] in string.punctuation:
+                                morph_content.append(morph_interp % word)
+                            else:
+                                morph_content.append(morph_word % (word, font_info))
+                except KeyError:
+                    pass
         morph_content.append('</chunk>\n</chunk>\n')
     
     return morph_header + "".join(morph_content) + morph_footer, font_families, font_sizes    
@@ -210,13 +221,13 @@ def parse_hOCR_file(f):
 def main():
     try:
         filename = sys.argv[1]
-    except:
+    except IOError:
         err("input file not specified")
     global DIRECTORY
     DIRECTORY = "corpus" if len(sys.argv) < 3 else sys.argv[2]
     try:
         f = open(filename)
-    except:
+    except IOError:
         err("specified file doesn't exist")
 
     morph, font_families, font_sizes = parse_hOCR_file(f)

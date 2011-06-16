@@ -117,7 +117,6 @@ font-weight = bold normal
 
 [pos]
 font = font-style font-weight font-family font-size
-interp =
 
 [named-entity]
 entity-orth = orth
@@ -179,7 +178,7 @@ def parse_hOCR_file(f):
 </tok>"""
     morph_interp = """<tok>
 <orth>%s</orth>
-<lex disamb="1"><base></base><ctag>interp</ctag></lex>
+<lex disamb="1"><base></base><ctag>font</ctag></lex>
 </tok>
 """
     morph_content = []
@@ -189,13 +188,8 @@ def parse_hOCR_file(f):
         err("Error parsing XML")
         
     paragraphs = CSSSelector('p')(dom)
-#    i = 0
     for paragraph in paragraphs:
-#        i += 1
-#        if (i > 2):
-#            sys.exit(1)
         morph_content.append('<chunk type="p">\n<chunk type="s">\n')
-        #spans = CSSSelector('span')(paragraph.getchildren()[0])
         style_spans = paragraph.getchildren()
         for style_span in style_spans:
             try:

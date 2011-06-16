@@ -202,10 +202,7 @@ def parse_hOCR_file(f):
                     if span.attrib["class"] == "ocrx_word" and span.text:
                         word = span.text.strip().replace('&', '&amp;')
                         if word:
-                            if word[0] in string.punctuation:
-                                morph_content.append(morph_interp % word)
-                            else:
-                                morph_content.append(morph_word % (word, font_info))
+                            morph_content.append(morph_word % (word, font_info))
                 except KeyError:
                     pass
         morph_content.append('</chunk>\n</chunk>\n')

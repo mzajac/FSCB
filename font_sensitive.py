@@ -176,11 +176,6 @@ def parse_hOCR_file(f):
 <orth>%s</orth>
 <lex disamb="1"><base></base><ctag>%s</ctag></lex>
 </tok>"""
-    morph_interp = """<tok>
-<orth>%s</orth>
-<lex disamb="1"><base></base><ctag>font</ctag></lex>
-</tok>
-"""
     morph_content = []
     try:
         dom = etree.parse(f)

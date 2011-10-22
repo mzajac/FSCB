@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 #encoding: utf-8
-import sys, os, shutil, string, codecs, re
+import sys, os, shutil, string, codecs, re, glob
 from lxml import etree
 from lxml.cssselect import CSSSelector
 
-SUBDIRECTORY = "data"
-
-def err(msg="unknown"):
+def err(msg):
     print "Error: %s" % msg
     sys.exit(1)
     
@@ -31,18 +29,20 @@ def extract_font_info(string, font_sizes, font_families):
     font_sizes.add(font_size)
     font_families.add(font_family)
     return "font:%s:%s:%s:%s" % (font_style, font_weight, font_family, font_size)
-
-def create_directories():
+    
+def create_directories(n):
     try:
         shutil.rmtree(DIRECTORY)
     except OSError:
         pass
-    try:
-        os.mkdir(DIRECTORY)
-        os.chdir(DIRECTORY)
-        os.mkdir(SUBDIRECTORY)
-    except:
-        err("couldn`t create directories")
+    os.mkdir(DIRECTORY)
+    os.chdir(DIRECTORY)
+    for i in xrange(n):
+        try:
+            os.mkdir(SUBDIRECTORY + str(i))
+        except OSError:
+            err("Couldn`t create directory.")
+    os.chdir('..')
         
 def write_bp_config():
     bp_cfg = """[locale]
@@ -100,7 +100,7 @@ values = "prasa" "książka" "internet" "rękopis"
 path = /cesHeader/profileDesc/textDesc/channel
     """
     try:
-        f = open("%s.bp.conf" % DIRECTORY, "w")
+        f = open("%s/%s.bp.conf" % (DIRECTORY, DIRECTORY), "w")
     except IOError:
         err("Error writing corpus builder config")
     print >> f, bp_cfg
@@ -126,7 +126,7 @@ entity-pos = pos
     """ % (font_families, font_sizes)
     
     try:
-        f = open("%s.cfg" % DIRECTORY, "w")
+        f = open("%s/%s.cfg" % (DIRECTORY, DIRECTORY), "w")
     except IOError:
         err("Error writing corpus config")
     print >> f, cfg
@@ -148,24 +148,23 @@ def write_header():
   </fileDesc>
 </cesHeader>"""
     try:
-        f = open("%s/header.xml" % SUBDIRECTORY, "w")
+        f = open("%s/%s/header.xml" % (DIRECTORY, SUBDIRECTORY), "w")
     except IOError:
-        err("Error writing header")
+        err("Error writing to header.xml file.")
     print >> f, header
     
     
 def write_morph(morph):
     try:
-        f = codecs.getwriter("utf-8")(open("%s/morph.xml" % SUBDIRECTORY, "w"))
+        f = codecs.getwriter("utf-8")(open("%s/%s/morph.xml" % (DIRECTORY, SUBDIRECTORY), "w"))
     except IOError:
-        err("Error writing morph")
+        err("Error writing to morph.xml file.")
     print >> f, morph
     
 
-def parse_hOCR_file(f):
+def parse_hOCR_file(f, font_families, font_sizes):
     """returns morph.xml in XCES format and two sets: one containing all font-families used and second all font sizes used in the document (both are needed to create corpus.cfg file)"""
     
-    font_sizes, font_families = set([]), set([])
     morph_header = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE cesAna SYSTEM "xcesAnaIPI.dtd">
 <cesAna xmlns:xlink="http://www.w3.org/1999/xlink" type="pre_morph" version="IPI-1.2">
@@ -181,48 +180,63 @@ def parse_hOCR_file(f):
         dom = etree.parse(f)
     except:
         err("Error parsing XML")
-        
-    paragraphs = CSSSelector('p')(dom)
-    for paragraph in paragraphs:
+    
+    lines = CSSSelector('span.ocr_line')(dom)
+    for line in lines:
         morph_content.append('<chunk type="p">\n<chunk type="s">\n')
-        style_spans = paragraph.getchildren()
-        for style_span in style_spans:
+        for style_span in line.getchildren():
             try:
                 font_info = extract_font_info(style_span.attrib["style"], font_sizes, font_families)    
-            except KeyError:
-                err("Can`t find style info in XML file.")
-            spans = style_span.getchildren()
-            for span in spans:
-                try:
-                    if span.attrib["class"] == "ocrx_word" and span.text:
+            except (IndexError, KeyError):
+                continue
+            for outer_span in style_span.getchildren():
+                if outer_span.attrib["class"] in ['ocrx_word'] and span.text:
+                    word = outer_span.text.strip().replace('&', '&amp;')
+                    if word:
+                        morph_content.append(morph_word % (word, font_info))
+                for span in outer_span.getchildren():
+                    if span.attrib["class"] in ['ocrx_word'] and span.text:
                         word = span.text.strip().replace('&', '&amp;')
                         if word:
                             morph_content.append(morph_word % (word, font_info))
-                except KeyError:
-                    pass
         morph_content.append('</chunk>\n</chunk>\n')
     
-    return morph_header + "".join(morph_content) + morph_footer, font_families, font_sizes    
+    return morph_header + "".join(morph_content) + morph_footer
 
 def main():
-    try:
-        filename = sys.argv[1]
-    except IOError:
-        err("input file not specified")
     global DIRECTORY
-    DIRECTORY = "corpus" if len(sys.argv) < 3 else sys.argv[2]
+    global SUBDIRECTORY
+    SUBDIRECTORY = 'data'
     try:
-        f = open(filename)
-    except IOError:
-        err("specified file doesn't exist")
-
-    morph, font_families, font_sizes = parse_hOCR_file(f)
-    create_directories()
-    write_morph(morph)
-    write_header()
+        DIRECTORY = sys.argv[1]
+    except IndexError:
+        err('Corpus basename not specified.')
+    filenames = sys.argv[2:]
+    if not filenames:
+        err('No input files specified.')
+    create_directories(len(filenames))
+    
+    font_families, font_sizes = set(), set()
+    #builds XCES files for all hOCR files
+    for i, filename in enumerate(filenames):
+        SUBDIRECTORY = 'data' + str(i)
+        try:
+            f = open(filename)
+        except:
+            err('Input file %s not found.' % filename)
+        morph = parse_hOCR_file(f, font_families, font_sizes)
+        write_morph(morph)
+        write_header()
+    
     write_config(font_families, font_sizes)
     write_bp_config()
-    os.system("bpng %s" % (DIRECTORY))
+    os.chdir(DIRECTORY)
+    #uses bpng to build a corpus out of built files
+    for i, filename in enumerate(filenames):
+        if i == 0:
+            os.system("bpng %s" % (DIRECTORY))
+        else:
+            os.system("bpng -c %s" % (DIRECTORY))
 
 if __name__ == '__main__':
     main()

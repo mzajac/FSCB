@@ -152,15 +152,6 @@ def write_header():
     except IOError:
         err("Error writing to header.xml file.")
     print >> f, header
-    
-    
-def write_morph(morph):
-    try:
-        f = codecs.getwriter("utf-8")(open("%s/%s/morph.xml" % (DIRECTORY, SUBDIRECTORY), "w"))
-    except IOError:
-        err("Error writing to morph.xml file.")
-    print >> f, morph
-    
 
 def parse_hOCR_file(f, font_families, font_sizes):
     """returns morph.xml in XCES format and two sets: one containing all font-families used and second all font sizes used in the document (both are needed to create corpus.cfg file)"""
@@ -169,39 +160,43 @@ def parse_hOCR_file(f, font_families, font_sizes):
 <!DOCTYPE cesAna SYSTEM "xcesAnaIPI.dtd">
 <cesAna xmlns:xlink="http://www.w3.org/1999/xlink" type="pre_morph" version="IPI-1.2">
 <chunkList xml:base="text.xml">
-<chunk type="wholedoc">\n"""
+<chunk type="wholedoc">"""
     morph_footer = "</chunk>\n</chunkList>\n</cesAna>"
     morph_word = """<tok>
 <orth>%s</orth>
 <lex disamb="1"><base></base><ctag>%s</ctag></lex>
 </tok>"""
-    morph_content = []
+    try:
+        out = codecs.getwriter("utf-8")(open("%s/%s/morph.xml" % (DIRECTORY, SUBDIRECTORY), "w"))
+    except IOError:
+        err("Error writing to morph.xml file.")
+
     try:
         dom = etree.parse(f)
     except:
         err("Error parsing XML")
     
+    print >> out, morph_header
     lines = CSSSelector('span.ocr_line')(dom)
     for line in lines:
-        morph_content.append('<chunk type="p">\n<chunk type="s">\n')
+        print >> out, '<chunk type="p">\n<chunk type="s">'
         for style_span in line.getchildren():
             try:
                 font_info = extract_font_info(style_span.attrib["style"], font_sizes, font_families)    
             except (IndexError, KeyError):
                 continue
             for outer_span in style_span.getchildren():
-                if outer_span.attrib["class"] in ['ocrx_word'] and span.text:
+                if outer_span.attrib["class"] in ['ocrx_word'] and outer_span.text:
                     word = outer_span.text.strip().replace('&', '&amp;')
                     if word:
-                        morph_content.append(morph_word % (word, font_info))
+                        print >> out, morph_word % (word, font_info)
                 for span in outer_span.getchildren():
                     if span.attrib["class"] in ['ocrx_word'] and span.text:
                         word = span.text.strip().replace('&', '&amp;')
                         if word:
-                            morph_content.append(morph_word % (word, font_info))
-        morph_content.append('</chunk>\n</chunk>\n')
-    
-    return morph_header + "".join(morph_content) + morph_footer
+                            print >> out, morph_word % (word, font_info)
+        print >> out, '</chunk>\n</chunk>'
+    print >> out, morph_footer
 
 def main():
     global DIRECTORY
@@ -224,19 +219,14 @@ def main():
             f = open(filename)
         except:
             err('Input file %s not found.' % filename)
-        morph = parse_hOCR_file(f, font_families, font_sizes)
-        write_morph(morph)
+        parse_hOCR_file(f, font_families, font_sizes)
         write_header()
     
     write_config(font_families, font_sizes)
     write_bp_config()
     os.chdir(DIRECTORY)
     #uses bpng to build a corpus out of built files
-    for i, filename in enumerate(filenames):
-        if i == 0:
-            os.system("bpng %s" % (DIRECTORY))
-        else:
-            os.system("bpng -c %s" % (DIRECTORY))
-
+    os.system("bpng %s" % (DIRECTORY))
+    
 if __name__ == '__main__':
     main()
